@@ -86,7 +86,6 @@
       const [lastUpdate, setLastUpdate] = useState(null);
       const [loading,   setLoading]   = useState(true);
       const [error,     setError]     = useState(null);
-      const [tab,       setTab]       = useState("main");
       const [tfSignals, setTfSignals] = useState({});
 
       // ── fetch price ─────────────────────────────────────
@@ -276,23 +275,10 @@
             </button>
           </div>
 
-          {/* Tabs */}
-          <div style={{ display:"flex", borderBottom:"1px solid #1a1a2e", padding:"0 20px" }}>
-            {[["main","📊 ราคา & วิเคราะห์"],["guide","📖 คู่มือ"]].map(([k,l]) => (
-              <button key={k} onClick={() => setTab(k)} style={{
-                padding:"11px 18px", background:"transparent", border:"none",
-                borderBottom: tab===k ? "2px solid #F7931A" : "2px solid transparent",
-                color: tab===k ? "#F7931A" : "#555",
-                cursor:"pointer", fontFamily:"inherit", fontSize:13, fontWeight:700,
-              }}>{l}</button>
-            ))}
-          </div>
-
           <div style={{ padding:"20px", animation:"fadeIn 0.3s ease" }}>
 
             {/* ── MAIN TAB ── */}
-            {tab === "main" && (
-              <div style={{ maxWidth:620 }}>
+            <div style={{ maxWidth:620 }}>
 
                 {/* Card: Price + Chart + Signal + Volume */}
                 <div style={{ background:"rgba(247,147,26,0.05)", border:"1px solid #F7931A33", borderRadius:16, padding:20 }}>
@@ -370,52 +356,6 @@
                     })}
                   </div>
 
-                  {/* Timeframe Summary */}
-                  {Object.keys(tfSignals).length === 5 && (() => {
-                    const weights = { "5m":1, "15m":2, "1h":3, "4h":4, "1d":5 };
-                    let buyScore = 0, sellScore = 0, totalWeight = 0;
-                    let buyCount = 0, sellCount = 0;
-                    TIMEFRAMES.forEach(({ key }) => {
-                      const tf = tfSignals[key];
-                      if (!tf || tf.signal === "—") return;
-                      const w = weights[key];
-                      totalWeight += w;
-                      if (tf.signal === "ซื้อ (BUY)")  { buyScore  += w; buyCount++;  }
-                      if (tf.signal === "ขาย (SELL)") { sellScore += w; sellCount++; }
-                    });
-                    const buyPct  = totalWeight > 0 ? (buyScore  / totalWeight) * 100 : 0;
-                    const sellPct = totalWeight > 0 ? (sellScore / totalWeight) * 100 : 0;
-
-                    let verdict, vColor, vEmoji, vDesc;
-                    if      (buyCount >= 4 && buyPct >= 60)  { verdict="STRONG BUY";  vColor="#00FF88"; vEmoji="🚀"; vDesc=`${buyCount}/5 timeframe เป็น BUY (weighted ${buyPct.toFixed(0)}%)`; }
-                    else if (buyCount >= 3 && buyPct >= 45)  { verdict="BUY";         vColor="#44DD88"; vEmoji="🟢"; vDesc=`${buyCount}/5 timeframe เป็น BUY (weighted ${buyPct.toFixed(0)}%)`; }
-                    else if (sellCount >= 4 && sellPct >= 60){ verdict="STRONG SELL"; vColor="#FF2244"; vEmoji="🔻"; vDesc=`${sellCount}/5 timeframe เป็น SELL (weighted ${sellPct.toFixed(0)}%)`; }
-                    else if (sellCount >= 3 && sellPct >= 45){ verdict="SELL";        vColor="#FF4466"; vEmoji="🔴"; vDesc=`${sellCount}/5 timeframe เป็น SELL (weighted ${sellPct.toFixed(0)}%)`; }
-                    else                                      { verdict="NEUTRAL";    vColor="#FFB800"; vEmoji="⚖️"; vDesc="สัญญาณยังไม่ชัดเจน — รอดูต่อ"; }
-
-                    return (
-                      <div style={{ background:`${vColor}12`, border:`2px solid ${vColor}55`, borderRadius:12, padding:"14px 16px", marginBottom:16 }}>
-                        <div style={{ fontSize:10, color:"#555", marginBottom:6, letterSpacing:1 }}>สรุปทุก TIMEFRAME</div>
-                        <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
-                          <span style={{ fontSize:28 }}>{vEmoji}</span>
-                          <div style={{ fontSize:22, fontWeight:900, color:vColor }}>{verdict}</div>
-                        </div>
-                        <div style={{ fontSize:11, color:"#888", marginBottom:10 }}>{vDesc}</div>
-                        {/* weighted bar */}
-                        <div style={{ height:8, borderRadius:6, overflow:"hidden", display:"flex", marginBottom:4 }}>
-                          <div style={{ width:`${buyPct}%`,  background:"linear-gradient(90deg,#00AA55,#00FF88)", transition:"width 0.5s ease" }} />
-                          <div style={{ width:`${100-buyPct-sellPct}%`, background:"#2a2a3a" }} />
-                          <div style={{ flex:1, background:"linear-gradient(90deg,#FF4466,#AA2233)" }} />
-                        </div>
-                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:"#555" }}>
-                          <span>BUY {buyPct.toFixed(0)}%</span>
-                          <span>น้ำหนัก: 5m=1 · 15m=2 · 1h=3 · 4h=4 · 1d=5</span>
-                          <span>{sellPct.toFixed(0)}% SELL</span>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
                   {/* Divider */}
                   <div style={{ borderTop:"1px solid #1a1a2e", margin:"16px 0" }} />
 
@@ -469,22 +409,6 @@
               </div>
             )}
 
-            {/* ── GUIDE TAB ── */}
-            {tab === "guide" && (
-              <div style={{ maxWidth:620, animation:"fadeIn 0.3s ease" }}>
-                {[
-                  { title:"📌 RSI คืออะไร?", body:"RSI (Relative Strength Index) บอกว่าตลาดซื้อมากเกินหรือขายมากเกิน\n• RSI < 30 = ขายมากเกิน (Oversold) → อาจเป็นโอกาสซื้อ\n• RSI > 70 = ซื้อมากเกิน (Overbought) → ระวังราคาจะลง\n• RSI 30–70 = ปกติ" },
-                  { title:"📌 Moving Average (MA) คืออะไร?", body:"MA คือค่าเฉลี่ยราคาในช่วงเวลาที่ผ่านมา\n• MA7 = ค่าเฉลี่ย 7 ช่วง (ระยะสั้น)\n• MA25 = ค่าเฉลี่ย 25 ช่วง (ระยะกลาง)\n• MA7 ตัด MA25 ขึ้น → Golden Cross (ซื้อ)\n• MA7 ตัด MA25 ลง → Death Cross (ขาย)" },
-                  { title:"📌 Bollinger Bands คืออะไร?", body:"แถบบนและล่างรอบราคา บอกช่วงความผันผวน\n• ราคาแตะแถบล่าง → อาจเด้งขึ้น\n• ราคาแตะแถบบน → อาจปรับลง\n• แถบแคบ = ตลาดนิ่ง | แถบกว้าง = ตลาดผันผวน" },
-                  { title:"⚠️ คำเตือนสำคัญ", body:"• ไม่มี indicator ไหนถูก 100%\n• อย่าลงทุนเงินที่ไม่สามารถเสียได้\n• เรียนรู้และฝึกบน Testnet ก่อนใช้เงินจริง\n• ระวัง FOMO (กลัวตกรถ) และอารมณ์ขณะเทรด\n• การวิเคราะห์นี้เพื่อการศึกษาเท่านั้น" },
-                ].map(({ title, body }) => (
-                  <div key={title} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid #1a1a2e", borderRadius:14, padding:20, marginBottom:12 }}>
-                    <div style={{ fontWeight:800, fontSize:14, marginBottom:10 }}>{title}</div>
-                    <div style={{ fontSize:13, lineHeight:2, color:"#888", whiteSpace:"pre-wrap" }}>{body}</div>
-                  </div>
-                ))}
-              </div>
-            )}
 
           </div>
         </div>
