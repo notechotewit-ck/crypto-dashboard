@@ -152,7 +152,7 @@
             askPct:  obTotal > 0 ? (askVol  / obTotal) * 100 : 50,
           });
         } catch {}
-      }, []);
+      }, [coin]);
 
       const TIMEFRAMES = [
         { key:"5m",  label:"5 นาที" },
@@ -185,7 +185,7 @@
           }
         }));
         setTfSignals(results);
-      }, []);
+      }, [coin]);
 
       useEffect(() => {
         setPriceData(null);
