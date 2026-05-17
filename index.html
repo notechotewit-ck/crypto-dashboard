@@ -78,6 +78,18 @@
       return           { signal: "รอดู (HOLD)", color: "#FFB800", emoji: "🟡", reasons };
     }
 
+    // ── Coin list ────────────────────────────────────────────
+    const COIN_LIST = [
+      { symbol:"BTC",  name:"Bitcoin",  binance:"BTCUSDT",  color:"#F7931A", mock:67000 },
+      { symbol:"ETH",  name:"Ethereum", binance:"ETHUSDT",  color:"#627EEA", mock:3500  },
+      { symbol:"BNB",  name:"BNB",      binance:"BNBUSDT",  color:"#F3BA2F", mock:580   },
+      { symbol:"SOL",  name:"Solana",   binance:"SOLUSDT",  color:"#9945FF", mock:180   },
+      { symbol:"XRP",  name:"XRP",      binance:"XRPUSDT",  color:"#00AAE4", mock:0.52  },
+      { symbol:"DOGE", name:"Dogecoin", binance:"DOGEUSDT", color:"#C2A633", mock:0.15  },
+      { symbol:"ADA",  name:"Cardano",  binance:"ADAUSDT",  color:"#0033AD", mock:0.45  },
+      { symbol:"AVAX", name:"Avalanche",binance:"AVAXUSDT", color:"#E84142", mock:35    },
+    ];
+
     // ── App ──────────────────────────────────────────────────
     function App() {
       const [priceData, setPriceData] = useState(null);
@@ -87,11 +99,12 @@
       const [loading,   setLoading]   = useState(true);
       const [error,     setError]     = useState(null);
       const [tfSignals, setTfSignals] = useState({});
+      const [coin, setCoin] = useState(COIN_LIST[0]);
 
       // ── fetch price ─────────────────────────────────────
       const fetchPrice = useCallback(async () => {
         try {
-          const res  = await fetch("https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT");
+          const res  = await fetch(`https://api.binance.com/api/v3/ticker/24hr?symbol=${coin.binance}`);
           if (!res.ok) throw new Error();
           const data = await res.json();
           const price    = parseFloat(data.lastPrice);
@@ -105,19 +118,19 @@
           setError(null);
         } catch {
           setError("ใช้ข้อมูลจำลอง");
-          const price = 67000 * (1 + (Math.random() - 0.48) * 0.02);
+          const price = coin.mock * (1 + (Math.random() - 0.48) * 0.02);
           setPriceData({ price, change24h: (Math.random() - 0.48) * 6 });
           setHistory(prev => prev.length ? [...prev, price].slice(-80) : generateMockHistory(price, 31));
           setLastUpdate(new Date());
         } finally { setLoading(false); }
-      }, []);
+      }, [coin]);
 
       // ── fetch order book ─────────────────────────────────
       const fetchOrderBook = useCallback(async () => {
         try {
           const [dRes, tRes] = await Promise.all([
-            fetch("https://api.binance.com/api/v3/depth?symbol=BTCUSDT&limit=20"),
-            fetch("https://api.binance.com/api/v3/trades?symbol=BTCUSDT&limit=500"),
+            fetch(`https://api.binance.com/api/v3/depth?symbol=${coin.binance}&limit=20`),
+            fetch(`https://api.binance.com/api/v3/trades?symbol=${coin.binance}&limit=500`),
           ]);
           const depth  = await dRes.json();
           const trades = await tRes.json();
@@ -154,7 +167,7 @@
         // ดึง kline แต่ละ TF พร้อมกัน, ใช้ limit=100 เพื่อให้ indicator แม่นขึ้น
         await Promise.all(TIMEFRAMES.map(async ({ key }) => {
           try {
-            const res    = await fetch(`https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=${key}&limit=100`);
+            const res    = await fetch(`https://api.binance.com/api/v3/klines?symbol=${coin.binance}&interval=${key}&limit=100`);
             const klines = await res.json();
             const closes = klines.map(k => parseFloat(k[4]));
             const price  = closes[closes.length - 1];
@@ -175,6 +188,11 @@
       }, []);
 
       useEffect(() => {
+        setPriceData(null);
+        setHistory([]);
+        setOrderBook(null);
+        setTfSignals({});
+        setLoading(true);
         fetchPrice();
         fetchOrderBook();
         fetchTimeframes();
@@ -182,7 +200,7 @@
         const t2 = setInterval(fetchOrderBook,  3000);
         const t3 = setInterval(fetchTimeframes, 300000); // อัปเดตทุก 5 นาที
         return () => { clearInterval(t1); clearInterval(t2); clearInterval(t3); };
-      }, [fetchPrice, fetchOrderBook, fetchTimeframes]);
+      }, [coin]);
 
       // ── derived (for chart color only) ──────────────────
       const isUp = (priceData?.change24h || 0) >= 0;
@@ -215,25 +233,15 @@
       };
 
       // ── verdict ──────────────────────────────────────────
-      const Verdict = () => {
-        if (!orderBook) return null;
-        const { buyPct, sellPct, bidPct } = orderBook;
-        const buyDom  = buyPct  > 55, sellDom = sellPct > 55, bidDom = bidPct > 55;
-        let verdict, vColor, vEmoji;
-        if      (buyDom && bidDom)    { verdict="แรงซื้อครอบงำตลาด — สัญญาณซื้อ";      vColor="#00FF88"; vEmoji="🟢"; }
-        else if (sellDom && !bidDom)  { verdict="แรงขายครอบงำตลาด — สัญญาณขาย";       vColor="#FF4466"; vEmoji="🔴"; }
-        else if (buyDom || bidDom)    { verdict="แรงซื้อมากกว่าเล็กน้อย — เฝ้าระวัง"; vColor="#88FF88"; vEmoji="🟡"; }
-        else if (sellDom || !bidDom)  { verdict="แรงขายมากกว่าเล็กน้อย — เฝ้าระวัง"; vColor="#FF8888"; vEmoji="🟡"; }
-        else                          { verdict="แรงซื้อ-ขายสมดุล — รอสัญญาณ";        vColor="#FFB800"; vEmoji="⚖️"; }
-        return (
-          <div style={{ background:`${vColor}10`, border:`1px solid ${vColor}33`, borderRadius:8, padding:"10px 14px", display:"flex", alignItems:"center", gap:8 }}>
-            <span style={{ fontSize:20 }}>{vEmoji}</span>
-            <div>
-              <div style={{ fontSize:10, color:"#555" }}>สรุปภาพรวม</div>
-              <div style={{ fontSize:13, fontWeight:700, color:vColor }}>{verdict}</div>
-            </div>
-          </div>
-        );
+      const getVerdict = (ob) => {
+        if (!ob) return null;
+        const { buyPct, sellPct, bidPct } = ob;
+        const buyDom = buyPct > 55, sellDom = sellPct > 55, bidDom = bidPct > 55;
+        if      (buyDom && bidDom)   return { emoji:"🟢", color:"#00FF88", label:"ซื้อ" };
+        else if (sellDom && !bidDom) return { emoji:"🔴", color:"#FF4466", label:"ขาย" };
+        else if (buyDom || bidDom)   return { emoji:"🟡", color:"#88FF88", label:"ซื้อเล็กน้อย" };
+        else if (sellDom || !bidDom) return { emoji:"🟡", color:"#FF8888", label:"ขายเล็กน้อย" };
+        else                         return { emoji:"⚖️", color:"#FFB800", label:"สมดุล" };
       };
 
       // ── loading ──────────────────────────────────────────
@@ -275,12 +283,35 @@
                 {/* Card: Price + Chart + Signal + Volume */}
                 <div style={{ background:"rgba(247,147,26,0.05)", border:"1px solid #F7931A33", borderRadius:16, padding:20 }}>
 
+                  {/* Coin Selector Dropdown */}
+                  <div style={{ marginBottom:16 }}>
+                    <select
+                      value={coin.symbol}
+                      onChange={e => setCoin(COIN_LIST.find(c => c.symbol === e.target.value))}
+                      style={{
+                        background:"#0a0a1a", border:`1px solid ${coin.color}66`,
+                        color:coin.color, padding:"8px 14px", borderRadius:10,
+                        fontFamily:"inherit", fontSize:13, fontWeight:700,
+                        cursor:"pointer", outline:"none", width:"100%",
+                        appearance:"none", WebkitAppearance:"none",
+                        backgroundImage:`url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23888' d='M6 8L1 3h10z'/%3E%3C/svg%3E")`,
+                        backgroundRepeat:"no-repeat", backgroundPosition:"right 12px center",
+                      }}
+                    >
+                      {COIN_LIST.map(c => (
+                        <option key={c.symbol} value={c.symbol}>
+                          {c.symbol} — {c.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
                   {/* Coin header */}
                   <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
-                    <div style={{ width:44, height:44, borderRadius:"50%", background:"#F7931A22", border:"2px solid #F7931A", display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:900, color:"#F7931A" }}>BTC</div>
+                    <div style={{ width:44, height:44, borderRadius:"50%", background:`${coin.color}22`, border:`2px solid ${coin.color}`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:10, fontWeight:900, color:coin.color }}>{coin.symbol}</div>
                     <div>
-                      <div style={{ fontWeight:800, fontSize:16 }}>Bitcoin</div>
-                      <div style={{ fontSize:11, color:"#555" }}>BTC / USDT</div>
+                      <div style={{ fontWeight:800, fontSize:16 }}>{coin.name}</div>
+                      <div style={{ fontSize:11, color:"#555" }}>{coin.symbol} / USDT</div>
                     </div>
                     <div style={{ marginLeft:"auto", padding:"4px 10px", borderRadius:20, fontSize:12, fontWeight:700,
                       background: isUp ? "#00FF8820" : "#FF446620",
@@ -308,45 +339,57 @@
                   <div style={{ borderTop:"1px solid #1a1a2e", margin:"16px 0" }} />
 
                   {/* Volume section */}
-                  <div style={{ fontSize:11, color:"#444", letterSpacing:1, marginBottom:12 }}>ปริมาณซื้อ-ขาย (500 รายการล่าสุด)</div>
-
                   {orderBook ? (
                     <>
-                      {/* Trade flow */}
-                      <div style={{ marginBottom:14 }}>
-                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:6 }}>
-                          <span style={{ color:"#00FF88", fontWeight:700 }}>🟢 ซื้อ {orderBook.buyPct.toFixed(1)}%</span>
-                          <span style={{ color:"#FF4466", fontWeight:700 }}>ขาย {orderBook.sellPct.toFixed(1)}% 🔴</span>
+                      {/* Side by side */}
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:10 }}>
+
+                        {/* ปริมาณซื้อ-ขาย */}
+                        <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid #1a1a2e", borderRadius:10, padding:"10px 12px" }}>
+                          <div style={{ fontSize:10, color:"#444", marginBottom:8 }}>ปริมาณ (500 รายการล่าสุด)</div>
+                          <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, marginBottom:5 }}>
+                            <span style={{ color:"#00FF88", fontWeight:700 }}>🟢 {orderBook.buyPct.toFixed(1)}%</span>
+                            <span style={{ color:"#FF4466", fontWeight:700 }}>{orderBook.sellPct.toFixed(1)}% 🔴</span>
+                          </div>
+                          <div style={{ height:8, borderRadius:4, overflow:"hidden", display:"flex", marginBottom:5 }}>
+                            <div style={{ width:`${orderBook.buyPct}%`, background:"linear-gradient(90deg,#00AA55,#00FF88)", transition:"width 0.5s ease" }} />
+                            <div style={{ flex:1, background:"linear-gradient(90deg,#FF4466,#AA2233)" }} />
+                          </div>
+                          <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:"#444" }}>
+                            <span>{orderBook.buyVol.toFixed(1)}</span>
+                            <span>{orderBook.sellVol.toFixed(1)}</span>
+                          </div>
                         </div>
-                        <div style={{ height:12, borderRadius:6, overflow:"hidden", display:"flex" }}>
-                          <div style={{ width:`${orderBook.buyPct}%`, background:"linear-gradient(90deg,#00AA55,#00FF88)", transition:"width 0.5s ease" }} />
-                          <div style={{ flex:1, background:"linear-gradient(90deg,#FF4466,#AA2233)" }} />
-                        </div>
-                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:"#555", marginTop:4 }}>
-                          <span>{orderBook.buyVol.toFixed(2)} BTC</span>
-                          <span>{orderBook.sellVol.toFixed(2)} BTC</span>
+
+                        {/* แรงซื้อ-ขาย Order Book */}
+                        <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid #1a1a2e", borderRadius:10, padding:"10px 12px" }}>
+                          <div style={{ fontSize:10, color:"#444", marginBottom:8 }}>แรงซื้อ-ขาย (Order Book)</div>
+                          <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, marginBottom:5 }}>
+                            <span style={{ color:"#00FF88", fontWeight:700 }}>🟢 {orderBook.bidPct.toFixed(1)}%</span>
+                            <span style={{ color:"#FF4466", fontWeight:700 }}>{orderBook.askPct.toFixed(1)}% 🔴</span>
+                          </div>
+                          <div style={{ height:8, borderRadius:4, overflow:"hidden", display:"flex", marginBottom:5 }}>
+                            <div style={{ width:`${orderBook.bidPct}%`, background:"#00FF8866", transition:"width 0.5s ease" }} />
+                            <div style={{ flex:1, background:"#FF446655" }} />
+                          </div>
+                          <div style={{ display:"flex", justifyContent:"space-between", fontSize:10, color:"#444" }}>
+                            <span>{orderBook.bidVol.toFixed(1)}</span>
+                            <span>{orderBook.askVol.toFixed(1)}</span>
+                          </div>
                         </div>
                       </div>
 
-                      {/* Order book pressure */}
-                      <div style={{ marginBottom:14 }}>
-                        <div style={{ fontSize:11, color:"#444", marginBottom:6 }}>แรงซื้อ-ขาย (Order Book)</div>
-                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:6 }}>
-                          <span style={{ color:"#00FF88", fontWeight:700 }}>🟢 Bid {orderBook.bidPct.toFixed(1)}%</span>
-                          <span style={{ color:"#FF4466", fontWeight:700 }}>Ask {orderBook.askPct.toFixed(1)}% 🔴</span>
-                        </div>
-                        <div style={{ height:8, borderRadius:6, overflow:"hidden", display:"flex" }}>
-                          <div style={{ width:`${orderBook.bidPct}%`, background:"#00FF8866", transition:"width 0.5s ease" }} />
-                          <div style={{ flex:1, background:"#FF446655" }} />
-                        </div>
-                        <div style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:"#555", marginTop:4 }}>
-                          <span>{orderBook.bidVol.toFixed(2)} BTC</span>
-                          <span>{orderBook.askVol.toFixed(2)} BTC</span>
-                        </div>
-                      </div>
-
-                      <Verdict />
-                      <div style={{ fontSize:10, color:"#333", marginTop:8, textAlign:"right" }}>● Real-time อัปเดตทุก 3 วินาที</div>
+                      {/* Verdict icon row */}
+                      {(() => {
+                        const v = getVerdict(orderBook);
+                        return v ? (
+                          <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                            <span style={{ fontSize:16 }}>{v.emoji}</span>
+                            <span style={{ fontSize:11, color:v.color, fontWeight:700 }}>สรุปภาพรวม: {v.label}</span>
+                            <span style={{ marginLeft:"auto", fontSize:10, color:"#333" }}>● real-time</span>
+                          </div>
+                        ) : null;
+                      })()}
                     </>
                   ) : (
                     <div style={{ fontSize:12, color:"#333", textAlign:"center", padding:"12px 0", animation:"pulse 1.5s infinite" }}>
